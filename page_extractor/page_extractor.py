@@ -8,7 +8,6 @@ import sys
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 from sys import getsizeof
 import random
 from tqdm import tqdm
@@ -41,25 +40,67 @@ class page_extractor:
         self.dir_out = dir_out
         self.kernel = np.ones((5, 5), np.uint8)
         
-        self.image = cv2.imread(self.image_dir)
-        self.model_page_dir = dir_models
+        
+        self.model_dir_of_binarization = dir_models + "/eynollah-binarization_20210425"
+        self.model_dir_of_col_classifier = dir_models + "/eynollah-column-classifier_20210425"
+        self.model_page_dir = dir_models + "/eynollah-page-extraction_20210425"
+        #self.model_page_dir = dir_models
         self.co_image = co_image
-        if co_image:
-            self.image_co = cv2.imread(self.co_image)
         self.out_co = out_co
+        
+        self.dir_in = True
+        if self.dir_in:
+            self.ls_imgs  = os.listdir(self.image_dir)
+            self.model_page = self.our_load_model(self.model_page_dir)
+            self.model_classifier = self.our_load_model(self.model_dir_of_col_classifier)
+            self.model_bin = self.our_load_model(self.model_dir_of_binarization)
+            
+    def our_load_model(self, model_file):
+        
+        try:
+            model = load_model(model_file, compile=False)
+        except:
+            model = load_model(model_file , compile=False,custom_objects = {"PatchEncoder": PatchEncoder, "Patches": Patches})
+
+        return model
+        
+    def get_image_and_co_image(self,image_dir,co_image,out_co,dir_out,image_name):
+        
+        file_stem = image_name.split('.')[0]
+        image_dir = os.path.join(image_dir,image_name)
+        if co_image:
+            co_image = os.path.join(co_image,file_stem+'.png')
+            out_co_to_wr = os.path.join(out_co,file_stem+'.png')
+    
+        dir_out_to_wr = os.path.join(dir_out,image_name)
+        
+        self.image = cv2.imread(image_dir)
+        if co_image:
+            #print(co_image,'co_image')
+            self.image_co = cv2.imread(co_image)
+        if co_image:
+            return dir_out_to_wr, out_co_to_wr
+        else:
+            return dir_out_to_wr
+        
+    def read_image(self):
+        self.image = cv2.imread(self.image_dir)
+        if self.co_image:
+            self.image_co = cv2.imread(self.co_image)
+        
             
     def resize_image(self, img_in, input_height, input_width):
         return cv2.resize(img_in, (input_width, input_height), interpolation=cv2.INTER_NEAREST)
 
             
     def start_new_session_and_model(self, model_dir):
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
+        #config = tf.ConfigProto()
+        #config.gpu_options.allow_growth = True
 
-        session = tf.InteractiveSession()
+        #session = tf.InteractiveSession()
         model = load_model(model_dir, compile=False)
 
-        return model, session
+        return model
     
     def do_prediction(self,patches,img,model,marginal_of_patch_percent=0.1):
         
@@ -139,7 +180,7 @@ class page_extractor:
                     img_patch = img[index_y_d:index_y_u, index_x_d:index_x_u, :]
 
                     label_p_pred = model.predict(
-                        img_patch.reshape(1, img_patch.shape[0], img_patch.shape[1], img_patch.shape[2]))
+                        img_patch.reshape(1, img_patch.shape[0], img_patch.shape[1], img_patch.shape[2]), verbose=0)
 
                     seg = np.argmax(label_p_pred, axis=3)[0]
 
@@ -231,7 +272,7 @@ class page_extractor:
             img = self.resize_image(img, img_height_model, img_width_model)
 
             label_p_pred = model.predict(
-                img.reshape(1, img.shape[0], img.shape[1], img.shape[2]))
+                img.reshape(1, img.shape[0], img.shape[1], img.shape[2]), verbose=0)
 
             seg = np.argmax(label_p_pred, axis=3)[0]
             seg_color =np.repeat(seg[:, :, np.newaxis], 3, axis=2)
@@ -254,13 +295,16 @@ class page_extractor:
             
     def extract_page(self):
         patches=False
-        model_page, session_page = self.start_new_session_and_model(self.model_page_dir)
+        if not self.dir_in:
+            model_page = self.start_new_session_and_model(self.model_page_dir)
         ###img = self.otsu_copy(self.image)
         for ii in range(1):
             img = cv2.GaussianBlur(self.image, (5, 5), 0)
 
-        
-        img_page_prediction=self.do_prediction(patches,img,model_page)
+        if not self.dir_in:
+            img_page_prediction=self.do_prediction(patches,img,model_page)
+        else:
+            img_page_prediction=self.do_prediction(patches,img,self.model_page)
         
         imgray = cv2.cvtColor(img_page_prediction, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(imgray, 0, 255, 0)
@@ -305,27 +349,124 @@ class page_extractor:
                                                     [ page_coord[3] , page_coord[1] ] ,
                                                 [ page_coord[2] , page_coord[1] ]] ) )
 
-        session_page.close()
-        del model_page
-        del session_page
+
         del contours
         del thresh
         del img
         del imgray
 
-        gc.collect()
         return croped_page, page_coord, co_image_page
+    
+    def number_of_columns(self,image_page,page_coord, file_name):
+        
+        if not self.dir_in:
+            model_num_classifier = self.start_new_session_and_model(self.model_dir_of_col_classifier)
+        
+        img_1ch = cv2.imread(os.path.join(self.image_dir,file_name), 0)
+        width_early = img_1ch.shape[1]
+        img_1ch = img_1ch[page_coord[0] : page_coord[1], page_coord[2] : page_coord[3]]
+
+        # plt.imshow(img_1ch)
+        # plt.show()
+        img_1ch = img_1ch / 255.0
+
+        img_1ch = cv2.resize(img_1ch, (448, 448), interpolation=cv2.INTER_NEAREST)
+
+        img_in = np.zeros((1, img_1ch.shape[0], img_1ch.shape[1], 3))
+        img_in[0, :, :, 0] = img_1ch[:, :]
+        img_in[0, :, :, 1] = img_1ch[:, :]
+        img_in[0, :, :, 2] = img_1ch[:, :]
+        
+        if not self.dir_in:
+            label_p_pred = model_num_classifier.predict(img_in, verbose=0)
+        else:
+            label_p_pred = self.model_classifier.predict(img_in, verbose=0)
+        #if not self.dir_in:
+            #label_p_pred = model_num_classifier.predict(img_in, verbose=0)
+        #else:
+            #label_p_pred = self.model_classifier.predict(img_in, verbose=0)
+
+        num_col = np.argmax(label_p_pred[0]) + 1
+        
+        return num_col
+    def calculate_width_height_by_columns(self, img, num_col):
+        img_w_new = int( num_col*500 +300 )
+        img_h_new = int(img.shape[0] / float(img.shape[1]) * img_w_new)
+        return img_w_new, img_h_new
+    
+    def do_binarization(self,img):
+        
+        if not self.dir_in:
+            model_bin = self.start_new_session_and_model(self.model_dir_of_binarization)
+            prediction_bin = self.do_prediction(True, img, model_bin)
+        else:
+            prediction_bin = self.do_prediction(True, img, self.model_bin)
+        
+        prediction_bin=prediction_bin[:,:,0]
+        prediction_bin = (prediction_bin[:,:]==0)*1
+        prediction_bin = prediction_bin*255
+        
+        prediction_bin =np.repeat(prediction_bin[:, :, np.newaxis], 3, axis=2)
+
+        prediction_bin = prediction_bin.astype(np.uint8)
+        
+        return prediction_bin
     def run(self):
-
-
+        #self.dir_in = False
         
-        image_page,page_coord, co_image_page=self.extract_page()
+        if not self.dir_in:
+            self.ls_imgs = [1]
+            
+        dir_page_images_to_write= '/home/vahid/Documents/main_regions_new_concept_training_dataset/training_data_asiatca_sbb_new_concept/images_page'
+        dir_page_label = '/home/vahid/Documents/main_regions_new_concept_training_dataset/training_data_asiatca_sbb_new_concept/labels_page'
         
-        cv2.imwrite(self.dir_out,image_page)
+        dir_page_images_bin_to_write = '/home/vahid/Documents/main_regions_new_concept_training_dataset/training_data_asiatca_sbb_new_concept/images_page_bin'
         
+        dir_page_images_scaled_to_write= '/home/vahid/Documents/main_regions_new_concept_training_dataset/training_data_asiatca_sbb_new_concept/images_page_scaled'
+        
+        for img_name in self.ls_imgs:
+            print(img_name,'img_name')
+            file_stem = img_name.split('.')[0]
+            if self.dir_in:
+                
+                if self.co_image:
+                    dir_out_to_wr, out_co_to_wr= self.get_image_and_co_image(self.image_dir,self.co_image,self.out_co, self.dir_out, img_name)
+                else:
+                    dir_out_to_wr= self.get_image_and_co_image(self.image_dir,self.co_image,self.out_co, self.dir_out, img_name)
 
-        if self.out_co:
-            cv2.imwrite(self.out_co,co_image_page)
+            #self.read_image()
+                
+        
+            image_page,page_coord, co_image_page=self.extract_page()
+            
+            cv2.imwrite(os.path.join(dir_page_images_to_write,img_name),image_page)
+            cv2.imwrite(os.path.join(dir_page_label,file_stem+'.png'),co_image_page)
+            
+            num_col = self.number_of_columns(image_page,page_coord,img_name)
+            
+            img_w_new, img_h_new = self.calculate_width_height_by_columns(image_page, num_col)
+            
+            print(num_col, img_w_new, img_h_new)
+            
+            img_bin = self.do_binarization(image_page)
+            
+            cv2.imwrite(os.path.join(dir_page_images_bin_to_write,img_name),img_bin)
+            
+            img_bin_resized  = self.resize_image(img_bin,img_h_new,img_w_new)
+            img_page_resize = self.resize_image(image_page,img_h_new,img_w_new)
+            
+            cv2.imwrite(os.path.join(dir_page_images_scaled_to_write,img_name),img_page_resize)
+            
+            
+            if self.co_image:
+                label_resized  = self.resize_image(co_image_page,img_h_new,img_w_new)
+            
+            cv2.imwrite(dir_out_to_wr,img_bin_resized)
+
+            #print(img_bin_resized.shape,label_resized.shape )
+            
+            if self.out_co:
+                cv2.imwrite(out_co_to_wr,label_resized)
         
 
     
