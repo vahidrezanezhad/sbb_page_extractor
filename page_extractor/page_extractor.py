@@ -27,6 +27,7 @@ import click
 import time
 from matplotlib import pyplot, transforms
 import imutils
+import xml.etree.ElementTree as ET
 
 warnings.filterwarnings('ignore')
 #
@@ -35,7 +36,7 @@ __doc__ = \
     tool to extract table form data from alto xml data
     """
 class page_extractor:
-    def __init__(self,dir_out, dir_models , image_dir = False, co_image = False, out_co = False, directory_images = False, out_page_bin = False, out_page_scaled = False, co_out_page_scaled = False, out_page_scaled_bin = False, out_page_xmls = False, dir_xmls = False):
+    def __init__(self,dir_out, dir_models , image_dir = False, co_image = False, out_co = False, directory_images = False, out_page_bin = False, out_page_scaled = False, co_out_page_scaled = False, out_page_scaled_bin = False, out_page_xmls = False, dir_xmls = False, out_xmls = False, write_num_columns = False):
         self.image_dir = image_dir  # XXX This does not seem to be a directory as the name suggests, but a file
         self.dir_out = dir_out
         self.kernel = np.ones((5, 5), np.uint8)
@@ -53,6 +54,8 @@ class page_extractor:
         self.out_page_scaled_bin = out_page_scaled_bin
         self.out_page_xmls = out_page_xmls
         self.dir_xmls = dir_xmls
+        self.out_xmls = out_xmls
+        self.write_num_columns = write_num_columns
         
         self.dir_in = directory_images
         if self.dir_in:
@@ -463,7 +466,7 @@ class page_extractor:
             if self.out_page_bin:
                 cv2.imwrite(os.path.join(self.out_page_bin,img_name),img_bin)
                 
-            if self.out_page_scaled or self.out_page_scaled_bin:
+            if self.out_page_scaled or self.out_page_scaled_bin or self.write_num_columns:
                 num_col = self.number_of_columns(image_page,page_coord,img_name)
                 
                 img_w_new, img_h_new = self.calculate_width_height_by_columns(image_page, num_col)
@@ -484,8 +487,52 @@ class page_extractor:
             if self.co_out_page_scaled:
                 label_resized  = self.resize_image(co_image_page,img_h_new,img_w_new)
                 cv2.imwrite(os.path.join(self.co_out_page_scaled,file_stem+'.png'),label_resized)
+                
+            if self.dir_xmls:
+                tree = ET.parse(os.path.join(self.dir_xmls,file_stem+'.xml'))
+                root=tree.getroot()
+                alltags=[elem.tag for elem in root.iter()]
+                link=alltags[0].split('}')[0]+'}'
+                
+                name_space = alltags[0].split('}')[0]
+                name_space = name_space.split('{')[1]
+                
+                page_element = root.find(link+'Page')
+                
+                if self.write_num_columns:
+                    page_element.set('columns',str(num_col))
+            
+                
+                printspace_subelement = ET.Element('PrintSpace')
+                    
+                
         
+                #page_print_sub=ET.SubElement(page, 'Border')
+                coord_page = ET.SubElement(printspace_subelement, 'Coords')
+                points_page_print=''
+                
+                self.scale_x = 1
+                self.scale_y = 1
 
+                for lmm in range(len(self.cont_page[0])):
+                    if len(self.cont_page[0][lmm])==2:
+                        points_page_print=points_page_print+str( int( (self.cont_page[0][lmm][0])/self.scale_x ) )
+                        points_page_print=points_page_print+','
+                        points_page_print=points_page_print+str( int( (self.cont_page[0][lmm][1])/self.scale_y ) )
+                    else:
+                        points_page_print=points_page_print+str( int((self.cont_page[0][lmm][0][0])/self.scale_x) )
+                        points_page_print=points_page_print+','
+                        points_page_print=points_page_print+str( int((self.cont_page[0][lmm][0][1])/self.scale_y) )
+
+                    if lmm<(len(self.cont_page[0])-1):
+                        points_page_print=points_page_print+' '
+                coord_page.set('points',points_page_print)
+                
+                page_element.insert(0, printspace_subelement)
+                
+                
+            ET.register_namespace("",name_space)
+            tree.write(os.path.join(self.out_xmls, file_stem+'.xml'),xml_declaration=True,method='xml',encoding="utf8",default_namespace=None)
     
         
 
@@ -505,11 +552,18 @@ class page_extractor:
 @click.option('--co_out_page_scaled', '-cops', help='if given corresponding image file name will also be cropped and scaled and written here.')
 @click.option('--out_page_xmls', '-opx', help='if given extracted page will be written here as a new xml file with the same file name as they are in xml dir.')
 @click.option('--dir_xmls', '-dx', help='dir of xml files.')
+@click.option('--out_xmls', '-ox', help='output directory where modified xmls will be written.')
+@click.option(
+    "--write_num_columns",
+    "-wnc",
+    is_flag=True,
+    help="if this parameter set to true, number of columns will be written as an attribute of page called columns. By the way this will couse error by pageviewer.",
+)
 
-def main(out, model, image,co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, out_page_xmls, dir_xmls):
+def main(out, model, image,co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, out_page_xmls, dir_xmls, out_xmls, write_num_columns):
     possibles = globals()  # XXX unused?
     possibles.update(locals())
-    x = page_extractor( out, model, image, co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, out_page_xmls,dir_xmls)
+    x = page_extractor( out, model, image, co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, out_page_xmls,dir_xmls, out_xmls, write_num_columns)
     x.run()
 
 
