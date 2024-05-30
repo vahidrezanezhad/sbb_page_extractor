@@ -500,11 +500,25 @@ class page_extractor:
                 name_space = name_space.split('{')[1]
                 
                 page_element = root.find(link+'Page')
-                
-                
-                    
+                metadata_element = root.find(link+'Metadata')
+
+                        
                 if self.write_num_columns:
-                    page_element.set('columns',str(num_col))
+                    ##subelement_col = ET.SubElement(metadata_element,'Columns_Num')
+                    ##subelement_col.text = str(num_col)
+                    ##metadata_element.set('Columns_num',str(num_col))
+                    
+                    comments_is_a_submetadata = False
+                    for child2 in metadata_element:
+                        tag2 = child2.tag
+                        if tag2.endswith('}Comments') or tag2.endswith('}comments'):
+                            comments_is_a_submetadata = True
+                            text_comments = child2.text
+                            text_comments = text_comments +'num_col'+str(num_col)+'num_col'
+                            child2.text = text_comments
+                    if not comments_is_a_submetadata:
+                        subelement_col = ET.SubElement(metadata_element,'Comments')
+                        subelement_col.text = 'num_col'+str(num_col)+'num_col'
                 
                 
                 if (link+'PrintSpace' in alltags) or  (link+'Border' in alltags):
