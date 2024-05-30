@@ -489,7 +489,9 @@ class page_extractor:
                 cv2.imwrite(os.path.join(self.co_out_page_scaled,file_stem+'.png'),label_resized)
                 
             if self.dir_xmls:
-                tree = ET.parse(os.path.join(self.dir_xmls,file_stem+'.xml'))
+                parser = ET.XMLParser(encoding="utf-8")
+                #tree = ET.parse(os.path.join(self.dir_xmls,file_stem+'.xml'))
+                tree = ET.parse(os.path.join(self.dir_xmls,file_stem+'.xml'), parser = ET.XMLParser(encoding = 'iso-8859-5'))
                 root=tree.getroot()
                 alltags=[elem.tag for elem in root.iter()]
                 link=alltags[0].split('}')[0]+'}'
@@ -499,36 +501,41 @@ class page_extractor:
                 
                 page_element = root.find(link+'Page')
                 
+                
+                    
                 if self.write_num_columns:
                     page_element.set('columns',str(num_col))
-            
                 
-                printspace_subelement = ET.Element('PrintSpace')
+                
+                if (link+'PrintSpace' in alltags) or  (link+'Border' in alltags):
+                    pass
+                else:
+                    printspace_subelement = ET.Element('PrintSpace')
+                        
                     
-                
-        
-                #page_print_sub=ET.SubElement(page, 'Border')
-                coord_page = ET.SubElement(printspace_subelement, 'Coords')
-                points_page_print=''
-                
-                self.scale_x = 1
-                self.scale_y = 1
+            
+                    #page_print_sub=ET.SubElement(page, 'Border')
+                    coord_page = ET.SubElement(printspace_subelement, 'Coords')
+                    points_page_print=''
+                    
+                    self.scale_x = 1
+                    self.scale_y = 1
 
-                for lmm in range(len(self.cont_page[0])):
-                    if len(self.cont_page[0][lmm])==2:
-                        points_page_print=points_page_print+str( int( (self.cont_page[0][lmm][0])/self.scale_x ) )
-                        points_page_print=points_page_print+','
-                        points_page_print=points_page_print+str( int( (self.cont_page[0][lmm][1])/self.scale_y ) )
-                    else:
-                        points_page_print=points_page_print+str( int((self.cont_page[0][lmm][0][0])/self.scale_x) )
-                        points_page_print=points_page_print+','
-                        points_page_print=points_page_print+str( int((self.cont_page[0][lmm][0][1])/self.scale_y) )
+                    for lmm in range(len(self.cont_page[0])):
+                        if len(self.cont_page[0][lmm])==2:
+                            points_page_print=points_page_print+str( int( (self.cont_page[0][lmm][0])/self.scale_x ) )
+                            points_page_print=points_page_print+','
+                            points_page_print=points_page_print+str( int( (self.cont_page[0][lmm][1])/self.scale_y ) )
+                        else:
+                            points_page_print=points_page_print+str( int((self.cont_page[0][lmm][0][0])/self.scale_x) )
+                            points_page_print=points_page_print+','
+                            points_page_print=points_page_print+str( int((self.cont_page[0][lmm][0][1])/self.scale_y) )
 
-                    if lmm<(len(self.cont_page[0])-1):
-                        points_page_print=points_page_print+' '
-                coord_page.set('points',points_page_print)
-                
-                page_element.insert(0, printspace_subelement)
+                        if lmm<(len(self.cont_page[0])-1):
+                            points_page_print=points_page_print+' '
+                    coord_page.set('points',points_page_print)
+                    
+                    page_element.insert(0, printspace_subelement)
                 
                 
             ET.register_namespace("",name_space)
