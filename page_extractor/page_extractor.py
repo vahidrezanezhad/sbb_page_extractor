@@ -35,7 +35,7 @@ __doc__ = \
     tool to extract table form data from alto xml data
     """
 class page_extractor:
-    def __init__(self, image_dir,dir_out, dir_models , co_image = False, out_co = False):
+    def __init__(self,dir_out, dir_models , image_dir = False, co_image = False, out_co = False, directory_images = False, out_page_bin = False, out_page_scaled = False, co_out_page_scaled = False, out_page_scaled_bin = False, out_page_xmls = False, dir_xmls = False):
         self.image_dir = image_dir  # XXX This does not seem to be a directory as the name suggests, but a file
         self.dir_out = dir_out
         self.kernel = np.ones((5, 5), np.uint8)
@@ -47,10 +47,16 @@ class page_extractor:
         #self.model_page_dir = dir_models
         self.co_image = co_image
         self.out_co = out_co
+        self.out_page_bin = out_page_bin
+        self.out_page_scaled = out_page_scaled
+        self.co_out_page_scaled = co_out_page_scaled
+        self.out_page_scaled_bin = out_page_scaled_bin
+        self.out_page_xmls = out_page_xmls
+        self.dir_xmls = dir_xmls
         
-        self.dir_in = True
+        self.dir_in = directory_images
         if self.dir_in:
-            self.ls_imgs  = os.listdir(self.image_dir)
+            self.ls_imgs  = os.listdir(self.dir_in)
             self.model_page = self.our_load_model(self.model_page_dir)
             self.model_classifier = self.our_load_model(self.model_dir_of_col_classifier)
             self.model_bin = self.our_load_model(self.model_dir_of_binarization)
@@ -67,7 +73,10 @@ class page_extractor:
     def get_image_and_co_image(self,image_dir,co_image,out_co,dir_out,image_name):
         
         file_stem = image_name.split('.')[0]
-        image_dir = os.path.join(image_dir,image_name)
+        if self.dir_in:
+            image_dir = os.path.join(image_dir,image_name)
+        else:
+            pass
         if co_image:
             co_image = os.path.join(co_image,file_stem+'.png')
             out_co_to_wr = os.path.join(out_co,file_stem+'.png')
@@ -361,8 +370,9 @@ class page_extractor:
         
         if not self.dir_in:
             model_num_classifier = self.start_new_session_and_model(self.model_dir_of_col_classifier)
-        
-        img_1ch = cv2.imread(os.path.join(self.image_dir,file_name), 0)
+            img_1ch = cv2.imread(self.image_dir, 0)
+        else:
+            img_1ch = cv2.imread(os.path.join(self.dir_in,file_name), 0)
         width_early = img_1ch.shape[1]
         img_1ch = img_1ch[page_coord[0] : page_coord[1], page_coord[2] : page_coord[3]]
 
@@ -425,48 +435,55 @@ class page_extractor:
         dir_page_images_scaled_to_write= '/home/vahid/Documents/main_regions_new_concept_training_dataset/training_data_asiatca_sbb_new_concept/images_page_scaled'
         
         for img_name in self.ls_imgs:
-            print(img_name,'img_name')
-            file_stem = img_name.split('.')[0]
+            
+            
             if self.dir_in:
+                file_stem = img_name.split('.')[0]
+                dir_in = self.dir_in
+            else:
+                img_name = self.image_dir.split('/')[-1]
+                file_stem = img_name.split('.')[0]
+                dir_in = self.image_dir
                 
-                if self.co_image:
-                    dir_out_to_wr, out_co_to_wr= self.get_image_and_co_image(self.image_dir,self.co_image,self.out_co, self.dir_out, img_name)
-                else:
-                    dir_out_to_wr= self.get_image_and_co_image(self.image_dir,self.co_image,self.out_co, self.dir_out, img_name)
-
-            #self.read_image()
+            if self.co_image:
+                dir_out_to_wr, out_co_to_wr= self.get_image_and_co_image(dir_in,self.co_image,self.out_co, self.dir_out, img_name)
+            else:
+                dir_out_to_wr= self.get_image_and_co_image(dir_in,self.co_image,self.out_co, self.dir_out, img_name)
+            
                 
         
             image_page,page_coord, co_image_page=self.extract_page()
             
-            cv2.imwrite(os.path.join(dir_page_images_to_write,img_name),image_page)
-            cv2.imwrite(os.path.join(dir_page_label,file_stem+'.png'),co_image_page)
-            
-            num_col = self.number_of_columns(image_page,page_coord,img_name)
-            
-            img_w_new, img_h_new = self.calculate_width_height_by_columns(image_page, num_col)
-            
-            print(num_col, img_w_new, img_h_new)
-            
-            img_bin = self.do_binarization(image_page)
-            
-            cv2.imwrite(os.path.join(dir_page_images_bin_to_write,img_name),img_bin)
-            
-            img_bin_resized  = self.resize_image(img_bin,img_h_new,img_w_new)
-            img_page_resize = self.resize_image(image_page,img_h_new,img_w_new)
-            
-            cv2.imwrite(os.path.join(dir_page_images_scaled_to_write,img_name),img_page_resize)
-            
-            
+            cv2.imwrite(os.path.join(self.dir_out,img_name),image_page)
             if self.co_image:
+                cv2.imwrite(os.path.join(self.out_co,file_stem+'.png'),co_image_page)
+            
+            if self.out_page_bin or self.out_page_scaled_bin:
+                img_bin = self.do_binarization(image_page)
+            if self.out_page_bin:
+                cv2.imwrite(os.path.join(self.out_page_bin,img_name),img_bin)
+                
+            if self.out_page_scaled or self.out_page_scaled_bin:
+                num_col = self.number_of_columns(image_page,page_coord,img_name)
+                
+                img_w_new, img_h_new = self.calculate_width_height_by_columns(image_page, num_col)
+                
+                print(num_col, img_w_new, img_h_new)
+                
+            if self.out_page_scaled:
+                img_page_resize = self.resize_image(image_page,img_h_new,img_w_new)
+                cv2.imwrite(os.path.join(self.out_page_scaled,img_name),img_page_resize)
+                
+            if self.out_page_scaled_bin:
+                img_bin_resized  = self.resize_image(img_bin,img_h_new,img_w_new)
+                cv2.imwrite(os.path.join(self.out_page_scaled_bin,img_name),img_bin_resized)
+                
+                
+                
+                
+            if self.co_out_page_scaled:
                 label_resized  = self.resize_image(co_image_page,img_h_new,img_w_new)
-            
-            cv2.imwrite(dir_out_to_wr,img_bin_resized)
-
-            #print(img_bin_resized.shape,label_resized.shape )
-            
-            if self.out_co:
-                cv2.imwrite(out_co_to_wr,label_resized)
+                cv2.imwrite(os.path.join(self.co_out_page_scaled,file_stem+'.png'),label_resized)
         
 
     
@@ -477,16 +494,22 @@ class page_extractor:
 
 @click.command()
 @click.option('--image', '-i', help='image filename')
+@click.option('--directory_images', '-di', help='image filename')
 @click.option('--out', '-o', help='output image name with directory')
 @click.option('--model', '-m', help='directory of model')
 @click.option('--co_image', '-ci', help='corresponding image file name that will be cropped as main image. In the case that you dont have any co image this option is not needed.')
 @click.option('--out_co', '-co', help='output name for corresponding image name with directory.  In the case that you dont have any co image this option is not needed.')
+@click.option('--out_page_bin', '-opb', help='if given the image page will be binarized and the output will be written here.')
+@click.option('--out_page_scaled', '-ops', help='if given the image page will be scaled with column classifier model and scaled page will be written here.')
+@click.option('--out_page_scaled_bin', '-opsb', help='if given the image page will be binarized and scaled with column classifier model and output will be written here.')
+@click.option('--co_out_page_scaled', '-cops', help='if given corresponding image file name will also be cropped and scaled and written here.')
+@click.option('--out_page_xmls', '-opx', help='if given extracted page will be written here as a new xml file with the same file name as they are in xml dir.')
+@click.option('--dir_xmls', '-dx', help='dir of xml files.')
 
-
-def main(image,out, model, co_image, out_co):
+def main(out, model, image,co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, out_page_xmls, dir_xmls):
     possibles = globals()  # XXX unused?
     possibles.update(locals())
-    x = page_extractor(image, out, model, co_image, out_co)
+    x = page_extractor( out, model, image, co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, out_page_xmls,dir_xmls)
     x.run()
 
 
