@@ -7,16 +7,14 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import sys
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 from sys import getsizeof
 import random
 from tqdm import tqdm
-from keras.models import model_from_json
-from keras.models import load_model
+from tensorflow.keras.models import model_from_json
+from tensorflow.keras.models import load_model
 
-from sklearn.cluster import KMeans
 import gc
-from keras import backend as K
+from tensorflow.python.keras import backend as K
 import tensorflow as tf
 tf.get_logger().setLevel('ERROR')
 from scipy.signal import find_peaks
@@ -25,9 +23,9 @@ import xml.etree.ElementTree as ET
 import warnings
 import click
 import time
-from matplotlib import pyplot, transforms
 import imutils
 import xml.etree.ElementTree as ET
+import json
 
 warnings.filterwarnings('ignore')
 #
@@ -36,7 +34,7 @@ __doc__ = \
     tool to extract table form data from alto xml data
     """
 class page_extractor:
-    def __init__(self,dir_out, dir_models , image_dir = False, co_image = False, out_co = False, directory_images = False, out_page_bin = False, out_page_scaled = False, co_out_page_scaled = False, out_page_scaled_bin = False, out_page_xmls = False, dir_xmls = False, out_xmls = False, write_num_columns = False):
+    def __init__(self,dir_out, dir_models , image_dir = False, co_image = False, out_co = False, directory_images = False, out_page_bin = False, out_page_scaled = False, co_out_page_scaled = False, out_page_scaled_bin = False, dir_xmls = False, out_xmls = False, write_num_columns = False, columns_widths = False):
         self.image_dir = image_dir  # XXX This does not seem to be a directory as the name suggests, but a file
         self.dir_out = dir_out
         self.kernel = np.ones((5, 5), np.uint8)
@@ -52,10 +50,11 @@ class page_extractor:
         self.out_page_scaled = out_page_scaled
         self.co_out_page_scaled = co_out_page_scaled
         self.out_page_scaled_bin = out_page_scaled_bin
-        self.out_page_xmls = out_page_xmls
+        #self.out_page_xmls = out_page_xmls
         self.dir_xmls = dir_xmls
         self.out_xmls = out_xmls
         self.write_num_columns = write_num_columns
+        self.columns_widths = columns_widths
         
         self.dir_in = directory_images
         if self.dir_in:
@@ -379,8 +378,6 @@ class page_extractor:
         width_early = img_1ch.shape[1]
         img_1ch = img_1ch[page_coord[0] : page_coord[1], page_coord[2] : page_coord[3]]
 
-        # plt.imshow(img_1ch)
-        # plt.show()
         img_1ch = img_1ch / 255.0
 
         img_1ch = cv2.resize(img_1ch, (448, 448), interpolation=cv2.INTER_NEAREST)
@@ -402,9 +399,11 @@ class page_extractor:
         num_col = np.argmax(label_p_pred[0]) + 1
         
         return num_col
-    def calculate_width_height_by_columns(self, img, num_col):
-        img_w_new = int( num_col*500 +300 )
+    def calculate_width_height_by_columns(self, img, num_col, ls_widths):
+        img_w_new = ls_widths[str(num_col)]
         img_h_new = int(img.shape[0] / float(img.shape[1]) * img_w_new)
+        #img_w_new = int( num_col*500 +300 )
+        #img_h_new = int(img.shape[0] / float(img.shape[1]) * img_w_new)
         return img_w_new, img_h_new
     
     def do_binarization(self,img):
@@ -466,13 +465,18 @@ class page_extractor:
             if self.out_page_bin:
                 cv2.imwrite(os.path.join(self.out_page_bin,img_name),img_bin)
                 
-            if self.out_page_scaled or self.out_page_scaled_bin or self.write_num_columns:
+            if self.out_page_scaled or self.out_page_scaled_bin:
+                with open(self.columns_widths) as f:
+                    widths_dict = json.load(f)
+                ls_widths = widths_dict['widths']
                 num_col = self.number_of_columns(image_page,page_coord,img_name)
                 
-                img_w_new, img_h_new = self.calculate_width_height_by_columns(image_page, num_col)
+                img_w_new, img_h_new = self.calculate_width_height_by_columns(image_page, num_col, ls_widths)
                 
                 print(num_col, img_w_new, img_h_new)
-                
+            if self.write_num_columns and not self.out_page_scaled and not self.out_page_scaled:
+                num_col = self.number_of_columns(image_page,page_coord,img_name)
+                print(num_col)
             if self.out_page_scaled:
                 img_page_resize = self.resize_image(image_page,img_h_new,img_w_new)
                 cv2.imwrite(os.path.join(self.out_page_scaled,img_name),img_page_resize)
@@ -552,8 +556,8 @@ class page_extractor:
                     page_element.insert(0, printspace_subelement)
                 
                 
-            ET.register_namespace("",name_space)
-            tree.write(os.path.join(self.out_xmls, file_stem+'.xml'),xml_declaration=True,method='xml',encoding="utf8",default_namespace=None)
+                ET.register_namespace("",name_space)
+                tree.write(os.path.join(self.out_xmls, file_stem+'.xml'),xml_declaration=True,method='xml',encoding="utf8",default_namespace=None)
     
         
 
@@ -563,7 +567,7 @@ class page_extractor:
 @click.command()
 @click.option('--image', '-i', help='image filename')
 @click.option('--directory_images', '-di', help='image filename')
-@click.option('--out', '-o', help='output image name with directory')
+@click.option('--out', '-o', help='output cropped page image will be written here.')
 @click.option('--model', '-m', help='directory of model')
 @click.option('--co_image', '-ci', help='corresponding image file name that will be cropped as main image. In the case that you dont have any co image this option is not needed.')
 @click.option('--out_co', '-co', help='output name for corresponding image name with directory.  In the case that you dont have any co image this option is not needed.')
@@ -571,20 +575,27 @@ class page_extractor:
 @click.option('--out_page_scaled', '-ops', help='if given the image page will be scaled with column classifier model and scaled page will be written here.')
 @click.option('--out_page_scaled_bin', '-opsb', help='if given the image page will be binarized and scaled with column classifier model and output will be written here.')
 @click.option('--co_out_page_scaled', '-cops', help='if given corresponding image file name will also be cropped and scaled and written here.')
-@click.option('--out_page_xmls', '-opx', help='if given extracted page will be written here as a new xml file with the same file name as they are in xml dir.')
+#@click.option('--out_page_xmls', '-opx', help='if given extracted page will be written here as a new xml file with the same file name as they are in xml dir.')
 @click.option('--dir_xmls', '-dx', help='dir of xml files.')
 @click.option('--out_xmls', '-ox', help='output directory where modified xmls will be written.')
 @click.option(
     "--write_num_columns",
     "-wnc",
     is_flag=True,
-    help="if this parameter set to true, number of columns will be written as an attribute of page called columns. By the way this will couse error by pageviewer.",
+    help="if this parameter set to true, number of columns will be encoded in metadata comments subelement as num_col{#num_col}num_col",
 )
 
-def main(out, model, image,co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, out_page_xmls, dir_xmls, out_xmls, write_num_columns):
+@click.option(
+    "--columns_widths",
+    "-cws",
+    help="json dictionary file where the width for each number of columns is given and scaling will be adjusted with those inputs.",
+    type=click.Path(exists=True, dir_okay=False),
+)
+
+def main(out, model, image,co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths):
     possibles = globals()  # XXX unused?
     possibles.update(locals())
-    x = page_extractor( out, model, image, co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, out_page_xmls,dir_xmls, out_xmls, write_num_columns)
+    x = page_extractor( out, model, image, co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths)
     x.run()
 
 

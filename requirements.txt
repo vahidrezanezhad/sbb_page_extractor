@@ -1,0 +1,5 @@
+tensorflow==2.12.
+opencv-python
+tqdm
+click
+imutils
