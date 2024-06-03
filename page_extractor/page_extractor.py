@@ -81,18 +81,18 @@ class page_extractor:
             pass
         if co_image:
             co_image = os.path.join(co_image,file_stem+'.png')
-            out_co_to_wr = os.path.join(out_co,file_stem+'.png')
+            #out_co_to_wr = os.path.join(out_co,file_stem+'.png')
     
-        dir_out_to_wr = os.path.join(dir_out,image_name)
+        #dir_out_to_wr = os.path.join(dir_out,image_name)
         
         self.image = cv2.imread(image_dir)
         if co_image:
             #print(co_image,'co_image')
             self.image_co = cv2.imread(co_image)
-        if co_image:
-            return dir_out_to_wr, out_co_to_wr
-        else:
-            return dir_out_to_wr
+        #if co_image:
+            #return dir_out_to_wr, out_co_to_wr
+        #else:
+            #return dir_out_to_wr
         
     def read_image(self):
         self.image = cv2.imread(self.image_dir)
@@ -436,7 +436,7 @@ class page_extractor:
         
         dir_page_images_scaled_to_write= '/home/vahid/Documents/main_regions_new_concept_training_dataset/training_data_asiatca_sbb_new_concept/images_page_scaled'
         
-        for img_name in self.ls_imgs:
+        for img_name in tqdm(self.ls_imgs):
             
             
             if self.dir_in:
@@ -447,16 +447,15 @@ class page_extractor:
                 file_stem = img_name.split('.')[0]
                 dir_in = self.image_dir
                 
-            if self.co_image:
-                dir_out_to_wr, out_co_to_wr= self.get_image_and_co_image(dir_in,self.co_image,self.out_co, self.dir_out, img_name)
-            else:
-                dir_out_to_wr= self.get_image_and_co_image(dir_in,self.co_image,self.out_co, self.dir_out, img_name)
+
+            self.get_image_and_co_image(dir_in,self.co_image,self.out_co, self.dir_out, img_name)
             
                 
         
             image_page,page_coord, co_image_page=self.extract_page()
-            
-            cv2.imwrite(os.path.join(self.dir_out,img_name),image_page)
+            if self.dir_out:
+                cv2.imwrite(os.path.join(self.dir_out,img_name),image_page)
+                
             if self.co_image:
                 cv2.imwrite(os.path.join(self.out_co,file_stem+'.png'),co_image_page)
             
@@ -473,10 +472,10 @@ class page_extractor:
                 
                 img_w_new, img_h_new = self.calculate_width_height_by_columns(image_page, num_col, ls_widths)
                 
-                print(num_col, img_w_new, img_h_new)
+                #print(num_col, img_w_new, img_h_new)
             if self.write_num_columns and not self.out_page_scaled and not self.out_page_scaled:
                 num_col = self.number_of_columns(image_page,page_coord,img_name)
-                print(num_col)
+                #print(num_col)
             if self.out_page_scaled:
                 img_page_resize = self.resize_image(image_page,img_h_new,img_w_new)
                 cv2.imwrite(os.path.join(self.out_page_scaled,img_name),img_page_resize)
@@ -505,6 +504,12 @@ class page_extractor:
                 
                 page_element = root.find(link+'Page')
                 metadata_element = root.find(link+'Metadata')
+                
+                
+                type_of_coords_point = False
+                
+                if (link+'Point' in alltags):
+                    type_of_coords_point = True
 
                         
                 if self.write_num_columns:
@@ -534,24 +539,38 @@ class page_extractor:
             
                     #page_print_sub=ET.SubElement(page, 'Border')
                     coord_page = ET.SubElement(printspace_subelement, 'Coords')
-                    points_page_print=''
                     
-                    self.scale_x = 1
-                    self.scale_y = 1
+                    if not type_of_coords_point:
+                        points_page_print=''
+                        
+                        self.scale_x = 1
+                        self.scale_y = 1
 
-                    for lmm in range(len(self.cont_page[0])):
-                        if len(self.cont_page[0][lmm])==2:
-                            points_page_print=points_page_print+str( int( (self.cont_page[0][lmm][0])/self.scale_x ) )
-                            points_page_print=points_page_print+','
-                            points_page_print=points_page_print+str( int( (self.cont_page[0][lmm][1])/self.scale_y ) )
-                        else:
-                            points_page_print=points_page_print+str( int((self.cont_page[0][lmm][0][0])/self.scale_x) )
-                            points_page_print=points_page_print+','
-                            points_page_print=points_page_print+str( int((self.cont_page[0][lmm][0][1])/self.scale_y) )
+                        for lmm in range(len(self.cont_page[0])):
+                            if len(self.cont_page[0][lmm])==2:
+                                points_page_print=points_page_print+str( int( (self.cont_page[0][lmm][0])/self.scale_x ) )
+                                points_page_print=points_page_print+','
+                                points_page_print=points_page_print+str( int( (self.cont_page[0][lmm][1])/self.scale_y ) )
+                            else:
+                                points_page_print=points_page_print+str( int((self.cont_page[0][lmm][0][0])/self.scale_x) )
+                                points_page_print=points_page_print+','
+                                points_page_print=points_page_print+str( int((self.cont_page[0][lmm][0][1])/self.scale_y) )
 
-                        if lmm<(len(self.cont_page[0])-1):
-                            points_page_print=points_page_print+' '
-                    coord_page.set('points',points_page_print)
+                            if lmm<(len(self.cont_page[0])-1):
+                                points_page_print=points_page_print+' '
+                        coord_page.set('points',points_page_print)
+                    else:
+                        for lmm in range(len(self.cont_page[0])):
+                            if len(self.cont_page[0][lmm])==2:
+                                coord_page_point_sub_element = ET.SubElement(coord_page,'Point')
+                                coord_page_point_sub_element.set('x', str( int( (self.cont_page[0][lmm][0]) )) )
+                                coord_page_point_sub_element.set('y', str( int( (self.cont_page[0][lmm][1]) )) )
+                            else:
+                                coord_page_point_sub_element = ET.SubElement(coord_page,'Point')
+                                coord_page_point_sub_element.set('x', str( int( (self.cont_page[0][lmm][0][0]) )) )
+                                coord_page_point_sub_element.set('y', str( int( (self.cont_page[0][lmm][0][1]) )) )
+                            
+                                                             
                     
                     page_element.insert(0, printspace_subelement)
                 
@@ -593,8 +612,9 @@ class page_extractor:
 )
 
 def main(out, model, image,co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths):
-    possibles = globals()  # XXX unused?
-    possibles.update(locals())
+    if (out_page_scaled or co_out_page_scaled or out_page_scaled_bin ) and not columns_widths:
+        print("Error. You have activated one of scaling output directories but you have not provided columns_width json file.")
+        sys.exit()
     x = page_extractor( out, model, image, co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths)
     x.run()
 
