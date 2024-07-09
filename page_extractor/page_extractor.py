@@ -523,7 +523,10 @@ class page_extractor:
                         if tag2.endswith('}Comments') or tag2.endswith('}comments'):
                             comments_is_a_submetadata = True
                             text_comments = child2.text
-                            text_comments = text_comments +'num_col'+str(num_col)+'num_col'
+                            if text_comments:
+                                text_comments = text_comments +'num_col'+str(num_col)+'num_col'
+                            else:
+                                text_comments = 'num_col'+str(num_col)+'num_col'
                             child2.text = text_comments
                     if not comments_is_a_submetadata:
                         subelement_col = ET.SubElement(metadata_element,'Comments')
