@@ -34,7 +34,7 @@ __doc__ = \
     tool to extract table form data from alto xml data
     """
 class page_extractor:
-    def __init__(self,dir_out, dir_models , image_dir = False, co_image = False, out_co = False, co_image2 = False, out_co2 = False, directory_images = False, out_page_bin = False, out_page_scaled = False, co_out_page_scaled = False, out_page_scaled_bin = False, dir_xmls = False, out_xmls = False, write_num_columns = False, columns_widths = False):
+    def __init__(self,dir_out, dir_models , image_dir = False, co_image = False, out_co = False, co_image2 = False, out_co2 = False, directory_images = False, out_page_bin = False, out_page_scaled = False, co_out_page_scaled = False, out_page_scaled_bin = False, dir_xmls = False, out_xmls = False, write_num_columns = False, columns_widths = False, ignore_page_extraction = False):
         self.image_dir = image_dir  # XXX This does not seem to be a directory as the name suggests, but a file
         self.dir_out = dir_out
         self.kernel = np.ones((5, 5), np.uint8)
@@ -57,6 +57,7 @@ class page_extractor:
         self.out_xmls = out_xmls
         self.write_num_columns = write_num_columns
         self.columns_widths = columns_widths
+        self.ignore_page_extraction = ignore_page_extraction
         
         self.dir_in = directory_images
         if self.dir_in:
@@ -388,7 +389,9 @@ class page_extractor:
         else:
             img_1ch = cv2.imread(os.path.join(self.dir_in,file_name), 0)
         width_early = img_1ch.shape[1]
-        img_1ch = img_1ch[page_coord[0] : page_coord[1], page_coord[2] : page_coord[3]]
+        
+        if not self.ignore_page_extraction:
+            img_1ch = img_1ch[page_coord[0] : page_coord[1], page_coord[2] : page_coord[3]]
 
         img_1ch = img_1ch / 255.0
 
@@ -463,12 +466,26 @@ class page_extractor:
             self.get_image_and_co_image(dir_in,self.co_image, self.out_co, self.co_image2, self.out_co2, self.dir_out, img_name)
             
                 
-        
-            image_page,page_coord, co_image_page, co_image_page2=self.extract_page()
+
+            if self.ignore_page_extraction:
+                if self.co_image:
+                    co_image_page = np.copy(self.image_co)
+                if self.co_image2:
+                    co_image_page2 = np.copy(self.image_co2)
+                else:
+                    co_image_page = None
+                
+                image_page = np.copy(self.image)
+                page_coord = None
+                
+            else:
+                image_page,page_coord, co_image_page, co_image_page2=self.extract_page()
+            
+            
             if self.dir_out:
                 cv2.imwrite(os.path.join(self.dir_out,img_name),image_page)
                 
-            if self.co_image:
+            if self.out_co:
                 cv2.imwrite(os.path.join(self.out_co,file_stem+'.png'),co_image_page)
                 
             if self.co_image2:
@@ -625,17 +642,25 @@ class page_extractor:
 )
 
 @click.option(
+    "--ignore_page_extraction",
+    "-ipe",
+    is_flag=True,
+    help="if this parameter set to true, page extraction will be skipped",
+)
+
+@click.option(
     "--columns_widths",
     "-cws",
     help="json dictionary file where the width for each number of columns is given and scaling will be adjusted with those inputs.",
     type=click.Path(exists=True, dir_okay=False),
 )
 
-def main(out, model, image, co_image, out_co, co_image2, out_co2, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths):
+def main(out, model, image, co_image, out_co, co_image2, out_co2, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths, ignore_page_extraction):
     if (out_page_scaled or co_out_page_scaled or out_page_scaled_bin ) and not columns_widths:
         print("Error. You have activated one of scaling output directories but you have not provided columns_width json file.")
         sys.exit()
-    x = page_extractor( out, model, image, co_image, out_co, co_image2, out_co2, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths)
+    x = page_extractor( out, model, image, co_image, out_co, co_image2, out_co2, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths, ignore_page_extraction)
+
     x.run()
 
 
