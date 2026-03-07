@@ -34,7 +34,7 @@ __doc__ = \
     tool to extract table form data from alto xml data
     """
 class page_extractor:
-    def __init__(self,dir_out, dir_models , image_dir = False, co_image = False, out_co = False, directory_images = False, out_page_bin = False, out_page_scaled = False, co_out_page_scaled = False, out_page_scaled_bin = False, dir_xmls = False, out_xmls = False, write_num_columns = False, columns_widths = False):
+    def __init__(self,dir_out, dir_models , image_dir = False, co_image = False, out_co = False, co_image2 = False, out_co2 = False, directory_images = False, out_page_bin = False, out_page_scaled = False, co_out_page_scaled = False, out_page_scaled_bin = False, dir_xmls = False, out_xmls = False, write_num_columns = False, columns_widths = False):
         self.image_dir = image_dir  # XXX This does not seem to be a directory as the name suggests, but a file
         self.dir_out = dir_out
         self.kernel = np.ones((5, 5), np.uint8)
@@ -42,10 +42,12 @@ class page_extractor:
         
         self.model_dir_of_binarization = dir_models + "/eynollah-binarization_20210425"
         self.model_dir_of_col_classifier = dir_models + "/eynollah-column-classifier_20210425"
-        self.model_page_dir = dir_models + "/eynollah-page-extraction_20210425"
+        self.model_page_dir = dir_models + "/model_eynollah_page_extraction_20250915"
         #self.model_page_dir = dir_models
         self.co_image = co_image
         self.out_co = out_co
+        self.co_image2 = co_image2
+        self.out_co2 = out_co2
         self.out_page_bin = out_page_bin
         self.out_page_scaled = out_page_scaled
         self.co_out_page_scaled = co_out_page_scaled
@@ -72,7 +74,7 @@ class page_extractor:
 
         return model
         
-    def get_image_and_co_image(self,image_dir,co_image,out_co,dir_out,image_name):
+    def get_image_and_co_image(self,image_dir,co_image,out_co,co_image2,out_co2,dir_out,image_name):
         
         file_stem = image_name.split('.')[0]
         if self.dir_in:
@@ -81,14 +83,19 @@ class page_extractor:
             pass
         if co_image:
             co_image = os.path.join(co_image,file_stem+'.png')
-            #out_co_to_wr = os.path.join(out_co,file_stem+'.png')
+            
+        if co_image2:
+            co_image2 = os.path.join(co_image2,file_stem+'.png')
     
-        #dir_out_to_wr = os.path.join(dir_out,image_name)
         
         self.image = cv2.imread(image_dir)
         if co_image:
             #print(co_image,'co_image')
             self.image_co = cv2.imread(co_image)
+            
+        if co_image2:
+            #print(co_image,'co_image')
+            self.image_co2 = cv2.imread(co_image2)
         #if co_image:
             #return dir_out_to_wr, out_co_to_wr
         #else:
@@ -98,6 +105,8 @@ class page_extractor:
         self.image = cv2.imread(self.image_dir)
         if self.co_image:
             self.image_co = cv2.imread(self.co_image)
+        if self.co_image2:
+            self.image_co2 = cv2.imread(self.co_image2)
         
             
     def resize_image(self, img_in, input_height, input_width):
@@ -350,6 +359,9 @@ class page_extractor:
         
         if self.co_image:
             co_image_page = self.image_co[page_coord[0]:page_coord[1] , page_coord[2]:page_coord[3] , :]
+            
+        if self.co_image2:
+            co_image_page2 = self.image_co2[page_coord[0]:page_coord[1] , page_coord[2]:page_coord[3] , :]
         
         else:
             co_image_page = None
@@ -366,7 +378,7 @@ class page_extractor:
         del img
         del imgray
 
-        return croped_page, page_coord, co_image_page
+        return croped_page, page_coord, co_image_page, co_image_page2
     
     def number_of_columns(self,image_page,page_coord, file_name):
         
@@ -438,7 +450,7 @@ class page_extractor:
         
         for img_name in tqdm(self.ls_imgs):
             
-            
+            print(img_name, 'img_name')
             if self.dir_in:
                 file_stem = img_name.split('.')[0]
                 dir_in = self.dir_in
@@ -448,16 +460,19 @@ class page_extractor:
                 dir_in = self.image_dir
                 
 
-            self.get_image_and_co_image(dir_in,self.co_image,self.out_co, self.dir_out, img_name)
+            self.get_image_and_co_image(dir_in,self.co_image, self.out_co, self.co_image2, self.out_co2, self.dir_out, img_name)
             
                 
         
-            image_page,page_coord, co_image_page=self.extract_page()
+            image_page,page_coord, co_image_page, co_image_page2=self.extract_page()
             if self.dir_out:
                 cv2.imwrite(os.path.join(self.dir_out,img_name),image_page)
                 
             if self.co_image:
                 cv2.imwrite(os.path.join(self.out_co,file_stem+'.png'),co_image_page)
+                
+            if self.co_image2:
+                cv2.imwrite(os.path.join(self.out_co2,file_stem+'.png'),co_image_page2)
             
             if self.out_page_bin or self.out_page_scaled_bin:
                 img_bin = self.do_binarization(image_page)
@@ -593,6 +608,8 @@ class page_extractor:
 @click.option('--model', '-m', help='directory of model')
 @click.option('--co_image', '-ci', help='corresponding image file name that will be cropped as main image. In the case that you dont have any co image this option is not needed.')
 @click.option('--out_co', '-co', help='output name for corresponding image name with directory.  In the case that you dont have any co image this option is not needed.')
+@click.option('--co_image2', '-ci2', help='corresponding image file name that will be cropped as main image. In the case that you dont have any co image this option is not needed.')
+@click.option('--out_co2', '-co2', help='output name for corresponding image name with directory.  In the case that you dont have any co image this option is not needed.')
 @click.option('--out_page_bin', '-opb', help='if given the image page will be binarized and the output will be written here.')
 @click.option('--out_page_scaled', '-ops', help='if given the image page will be scaled with column classifier model and scaled page will be written here.')
 @click.option('--out_page_scaled_bin', '-opsb', help='if given the image page will be binarized and scaled with column classifier model and output will be written here.')
@@ -614,11 +631,11 @@ class page_extractor:
     type=click.Path(exists=True, dir_okay=False),
 )
 
-def main(out, model, image,co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths):
+def main(out, model, image, co_image, out_co, co_image2, out_co2, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths):
     if (out_page_scaled or co_out_page_scaled or out_page_scaled_bin ) and not columns_widths:
         print("Error. You have activated one of scaling output directories but you have not provided columns_width json file.")
         sys.exit()
-    x = page_extractor( out, model, image, co_image, out_co, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths)
+    x = page_extractor( out, model, image, co_image, out_co, co_image2, out_co2, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths)
     x.run()
 
 
