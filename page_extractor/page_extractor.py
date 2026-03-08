@@ -34,7 +34,7 @@ __doc__ = \
     tool to extract table form data from alto xml data
     """
 class page_extractor:
-    def __init__(self,dir_out, dir_models , image_dir = False, co_image = False, out_co = False, co_image2 = False, out_co2 = False, directory_images = False, out_page_bin = False, out_page_scaled = False, co_out_page_scaled = False, out_page_scaled_bin = False, dir_xmls = False, out_xmls = False, write_num_columns = False, columns_widths = False, ignore_page_extraction = False):
+    def __init__(self,dir_out, dir_models , image_dir = False, co_image = False, out_co = False, co_image2 = False, out_co2 = False, directory_images = False, out_page_bin = False, out_page_scaled = False, co_out_page_scaled = False, co_out_page_scaled2 = False, out_page_scaled_bin = False, dir_xmls = False, out_xmls = False, write_num_columns = False, columns_widths = False, ignore_page_extraction = False):
         self.image_dir = image_dir  # XXX This does not seem to be a directory as the name suggests, but a file
         self.dir_out = dir_out
         self.kernel = np.ones((5, 5), np.uint8)
@@ -51,6 +51,7 @@ class page_extractor:
         self.out_page_bin = out_page_bin
         self.out_page_scaled = out_page_scaled
         self.co_out_page_scaled = co_out_page_scaled
+        self.co_out_page_scaled2 = co_out_page_scaled2
         self.out_page_scaled_bin = out_page_scaled_bin
         #self.out_page_xmls = out_page_xmls
         self.dir_xmls = dir_xmls
@@ -470,10 +471,12 @@ class page_extractor:
             if self.ignore_page_extraction:
                 if self.co_image:
                     co_image_page = np.copy(self.image_co)
+                else:
+                    co_image_page = None
                 if self.co_image2:
                     co_image_page2 = np.copy(self.image_co2)
                 else:
-                    co_image_page = None
+                    co_image_page2 = None
                 
                 image_page = np.copy(self.image)
                 page_coord = None
@@ -488,7 +491,7 @@ class page_extractor:
             if self.out_co:
                 cv2.imwrite(os.path.join(self.out_co,file_stem+'.png'),co_image_page)
                 
-            if self.co_image2:
+            if self.out_co2:
                 cv2.imwrite(os.path.join(self.out_co2,file_stem+'.png'),co_image_page2)
             
             if self.out_page_bin or self.out_page_scaled_bin:
@@ -522,6 +525,11 @@ class page_extractor:
             if self.co_out_page_scaled:
                 label_resized  = self.resize_image(co_image_page,img_h_new,img_w_new)
                 cv2.imwrite(os.path.join(self.co_out_page_scaled,file_stem+'.png'),label_resized)
+                
+                
+            if self.co_out_page_scaled2:
+                label_resized2  = self.resize_image(co_image_page2,img_h_new,img_w_new)
+                cv2.imwrite(os.path.join(self.co_out_page_scaled2,file_stem+'.png'),label_resized2)
                 
             if self.dir_xmls:
                 parser = ET.XMLParser(encoding="utf-8")
@@ -631,6 +639,7 @@ class page_extractor:
 @click.option('--out_page_scaled', '-ops', help='if given the image page will be scaled with column classifier model and scaled page will be written here.')
 @click.option('--out_page_scaled_bin', '-opsb', help='if given the image page will be binarized and scaled with column classifier model and output will be written here.')
 @click.option('--co_out_page_scaled', '-cops', help='if given corresponding image file name will also be cropped and scaled and written here.')
+@click.option('--co_out_page_scaled2', '-cops2', help='if second given corresponding image file name will also be cropped and scaled and written here.')
 #@click.option('--out_page_xmls', '-opx', help='if given extracted page will be written here as a new xml file with the same file name as they are in xml dir.')
 @click.option('--dir_xmls', '-dx', help='dir of xml files.')
 @click.option('--out_xmls', '-ox', help='output directory where modified xmls will be written.')
@@ -655,11 +664,11 @@ class page_extractor:
     type=click.Path(exists=True, dir_okay=False),
 )
 
-def main(out, model, image, co_image, out_co, co_image2, out_co2, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths, ignore_page_extraction):
+def main(out, model, image, co_image, out_co, co_image2, out_co2, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, co_out_page_scaled2, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths, ignore_page_extraction):
     if (out_page_scaled or co_out_page_scaled or out_page_scaled_bin ) and not columns_widths:
         print("Error. You have activated one of scaling output directories but you have not provided columns_width json file.")
         sys.exit()
-    x = page_extractor( out, model, image, co_image, out_co, co_image2, out_co2, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths, ignore_page_extraction)
+    x = page_extractor( out, model, image, co_image, out_co, co_image2, out_co2, directory_images, out_page_bin, out_page_scaled, co_out_page_scaled, co_out_page_scaled2, out_page_scaled_bin, dir_xmls, out_xmls, write_num_columns, columns_widths, ignore_page_extraction)
 
     x.run()
 
